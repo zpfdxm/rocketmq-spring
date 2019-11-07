@@ -20,16 +20,13 @@ package org.apache.rocketmq.spring.core;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.rocketmq.client.exception.MQClientException;
-import org.apache.rocketmq.client.producer.DefaultMQProducer;
-import org.apache.rocketmq.client.producer.MessageQueueSelector;
-import org.apache.rocketmq.client.producer.SendCallback;
-import org.apache.rocketmq.client.producer.SendResult;
-import org.apache.rocketmq.client.producer.TransactionMQProducer;
-import org.apache.rocketmq.client.producer.TransactionSendResult;
+import org.apache.rocketmq.client.producer.*;
 import org.apache.rocketmq.client.producer.selector.SelectMessageQueueByHash;
 import org.apache.rocketmq.remoting.RPCHook;
 import org.apache.rocketmq.spring.config.RocketMQConfigUtils;
 import org.apache.rocketmq.spring.support.RocketMQUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.messaging.Message;
@@ -47,22 +44,18 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+/**
+ * @author zpf
+ */
 @SuppressWarnings({"WeakerAccess", "unused"})
 public class RocketMQTemplate extends AbstractMessageSendingTemplate<String> implements InitializingBean, DisposableBean {
     private static final  Logger log = LoggerFactory.getLogger(RocketMQTemplate.class);
-
-    private DefaultMQProducer producer;
-
-    private ObjectMapper objectMapper;
-
-    private String charset = "UTF-8";
-
-    private MessageQueueSelector messageQueueSelector = new SelectMessageQueueByHash();
-
     private final Map<String, TransactionMQProducer> cache = new ConcurrentHashMap<>(); //only put TransactionMQProducer by now!!!
+    private DefaultMQProducer producer;
+    private ObjectMapper objectMapper;
+    private String charset = "UTF-8";
+    private MessageQueueSelector messageQueueSelector = new SelectMessageQueueByHash();
 
     public DefaultMQProducer getProducer() {
         return producer;
@@ -285,6 +278,7 @@ public class RocketMQTemplate extends AbstractMessageSendingTemplate<String> imp
         Message<?> message = this.doConvert(payload, null, null);
         return syncSendOrderly(destination, message, hashKey, timeout);
     }
+
     /**
      * Same to {@link #asyncSend(String, Message, SendCallback)} with send timeout and delay level specified in addition.
      *
@@ -312,6 +306,7 @@ public class RocketMQTemplate extends AbstractMessageSendingTemplate<String> imp
             throw new MessagingException(e.getMessage(), e);
         }
     }
+
     /**
      * Same to {@link #asyncSend(String, Message, SendCallback)} with send timeout specified in addition.
      *
@@ -376,8 +371,7 @@ public class RocketMQTemplate extends AbstractMessageSendingTemplate<String> imp
      * @param sendCallback {@link SendCallback}
      * @param timeout      send timeout with millis
      */
-    public void asyncSendOrderly(String destination, Message<?> message, String hashKey, SendCallback sendCallback,
-                                 long timeout) {
+    public void asyncSendOrderly(String destination, Message<?> message, String hashKey, SendCallback sendCallback, long timeout) {
         if (Objects.isNull(message) || Objects.isNull(message.getPayload())) {
             log.error("asyncSendOrderly failed. destination:{}, message is null ", destination);
             throw new IllegalArgumentException("`message` and `message.payload` cannot be null");
@@ -426,8 +420,7 @@ public class RocketMQTemplate extends AbstractMessageSendingTemplate<String> imp
      * @param sendCallback {@link SendCallback}
      * @param timeout      send timeout with millis
      */
-    public void asyncSendOrderly(String destination, Object payload, String hashKey, SendCallback sendCallback,
-                                 long timeout) {
+    public void asyncSendOrderly(String destination, Object payload, String hashKey, SendCallback sendCallback, long timeout) {
         Message<?> message = this.doConvert(payload, null, null);
         asyncSendOrderly(destination, message, hashKey, sendCallback, timeout);
     }
@@ -515,8 +508,6 @@ public class RocketMQTemplate extends AbstractMessageSendingTemplate<String> imp
         log.debug("send message to `{}` finished. result:{}", destination, sendResult);
     }
 
-
-
     @Override
     protected Message<?> doConvert(Object payload, Map<String, Object> headers, MessagePostProcessor postProcessor) {
         String content;
@@ -568,8 +559,7 @@ public class RocketMQTemplate extends AbstractMessageSendingTemplate<String> imp
 
         TransactionMQProducer cachedProducer = cache.get(name);
         if (cachedProducer == null) {
-            throw new MessagingException(
-                String.format("Can not found MQProducer '%s' in cache! please define @RocketMQLocalTransactionListener class or invoke createOrGetStartedTransactionMQProducer() to create it firstly", name));
+            throw new MessagingException(String.format("Can not found MQProducer '%s' in cache! please define @RocketMQLocalTransactionListener class or invoke createOrGetStartedTransactionMQProducer() to create it firstly", name));
         }
 
         return cachedProducer;
@@ -625,9 +615,8 @@ public class RocketMQTemplate extends AbstractMessageSendingTemplate<String> imp
      * @return true if producer is created and started; false if the named producer already exists in cache.
      * @throws MessagingException
      */
-    public boolean createAndStartTransactionMQProducer(String txProducerGroup,
-                                                       RocketMQLocalTransactionListener transactionListener,
-                                                       ExecutorService executorService, RPCHook rpcHook) throws MessagingException {
+    public boolean createAndStartTransactionMQProducer(String txProducerGroup, RocketMQLocalTransactionListener transactionListener,
+        ExecutorService executorService, RPCHook rpcHook) throws MessagingException {
         txProducerGroup = getTxProducerGroupName(txProducerGroup);
         if (cache.containsKey(txProducerGroup)) {
             log.info(String.format("get TransactionMQProducer '%s' from cache", txProducerGroup));
@@ -645,9 +634,8 @@ public class RocketMQTemplate extends AbstractMessageSendingTemplate<String> imp
         return true;
     }
 
-    private TransactionMQProducer createTransactionMQProducer(String name,
-                                                              RocketMQLocalTransactionListener transactionListener,
-                                                              ExecutorService executorService, RPCHook rpcHook) {
+    private TransactionMQProducer createTransactionMQProducer(String name, RocketMQLocalTransactionListener transactionListener,
+        ExecutorService executorService, RPCHook rpcHook) {
         Assert.notNull(producer, "Property 'producer' is required");
         Assert.notNull(transactionListener, "Parameter 'transactionListener' is required");
         TransactionMQProducer txProducer;

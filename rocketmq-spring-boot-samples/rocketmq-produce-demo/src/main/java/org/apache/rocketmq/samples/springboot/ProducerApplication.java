@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Producer, using RocketMQTemplate sends a variety of messages
+ * @author ali
  */
 @SpringBootApplication
 public class ProducerApplication implements CommandLineRunner {
@@ -63,7 +64,6 @@ public class ProducerApplication implements CommandLineRunner {
         SpringApplication.run(ProducerApplication.class, args);
     }
 
-    @Override
     public void run(String... args) throws Exception {
         // Send string
         SendResult sendResult = rocketMQTemplate.syncSend(springTopic, "Hello, World!");
@@ -90,7 +90,8 @@ public class ProducerApplication implements CommandLineRunner {
         });
 
         // Send message with special tag
-        rocketMQTemplate.convertAndSend(msgExtTopic + ":tag0", "I'm from tag0");  // tag0 will not be consumer-selected
+        // tag0 will not be consumer-selected
+        rocketMQTemplate.convertAndSend(msgExtTopic + ":tag0", "I'm from tag0");
         System.out.printf("syncSend topic %s tag %s %n", msgExtTopic, "tag0");
         rocketMQTemplate.convertAndSend(msgExtTopic + ":tag1", "I'm from tag1");
         System.out.printf("syncSend topic %s tag %s %n", msgExtTopic, "tag1");
@@ -141,7 +142,6 @@ public class ProducerApplication implements CommandLineRunner {
 
         private ConcurrentHashMap<String, Integer> localTrans = new ConcurrentHashMap<String, Integer>();
 
-        @Override
         public RocketMQLocalTransactionState executeLocalTransaction(Message msg, Object arg) {
             String transId = (String)msg.getHeaders().get(RocketMQHeaders.TRANSACTION_ID);
             System.out.printf("#### executeLocalTransaction is executed, msgTransactionId=%s %n",
@@ -167,7 +167,6 @@ public class ProducerApplication implements CommandLineRunner {
             return RocketMQLocalTransactionState.UNKNOWN;
         }
 
-        @Override
         public RocketMQLocalTransactionState checkLocalTransaction(Message msg) {
             String transId = (String)msg.getHeaders().get(RocketMQHeaders.TRANSACTION_ID);
             RocketMQLocalTransactionState retState = RocketMQLocalTransactionState.COMMIT;
@@ -183,6 +182,8 @@ public class ProducerApplication implements CommandLineRunner {
                     case 2:
                         retState = RocketMQLocalTransactionState.ROLLBACK;
                         break;
+                    default:
+                        throw new IllegalStateException("Unexpected value: " + status);
                 }
             }
             System.out.printf("------ !!! checkLocalTransaction is executed once," +
